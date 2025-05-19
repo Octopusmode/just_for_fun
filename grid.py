@@ -27,14 +27,10 @@ class Grid():
         """
         Позволяет итерироваться по клеткам в сетке
         """
-        for y in range(self.max_y):
-            for x in range(self.max_x):
-                yield self.cells[y, x]
-                if isinstance(self.cells[y, x], Cell):
+        def __iter__(self):
+            for y in range(self.max_y):
+                for x in range(self.max_x):
                     yield self.cells[y, x]
-                else:
-                    raise TypeError("Cell must be an instance of Cell")
-                yield None
 
     def __getitem__(self, item: tuple[int, int]):
         """
@@ -104,9 +100,14 @@ class Grid():
                 raise IndexError("Coordinates out of bounds")
             
             
-    def count(self, x: int, y: int) -> int:
+    def count(self, x: int, y: int, state: int = Cell.ALIVE) -> int:
         """
-        Считает количество живых клеток вокруг данной клетки
+        Считает количество клеток с заданным состоянием вокруг данной клетки
+
+        :param x: координата x клетки
+        :param y: координата y клетки
+        :param state: состояние клетки, которое нужно считать (по умолчанию ALIVE)
+        :return: количество клеток с заданным состоянием вокруг (x, y)
         """
         neighbors = [
             (x + dx, y + dy)
@@ -118,10 +119,48 @@ class Grid():
         for nx, ny in neighbors:
             if 0 <= nx < self.max_x and 0 <= ny < self.max_y:
                 cell = self.cells[ny, nx]
-                if isinstance(cell, Cell) and cell.state == Cell.ALIVE:
+                if isinstance(cell, Cell) and cell.state == state:
                     count += 1
         return count
     
+    def step(self):
+        """
+        Выполняет один шаг симуляции, обновляя состояние клеток по следующим правилам:
+        1. Если клетка живая (ALIVE) и у неё меньше 2-х или больше 3-х живых соседей, она умирает (DEAD).
+        2. Если клетка живая (ALIVE) и у неё 2 или 3 живых соседа, она остаётся живой (ALIVE).
+        3. Если клетка мёртвая (DEAD) и у неё ровно 3 живых соседа, она становится живой (ALIVE).
+        4. В противном случае клетка остаётся мёртвой (DEAD).
+        
+        """
+        new_cells = np.empty((self.max_y, self.max_x), dtype=object)
+        for y in range(self.max_y):
+            for x in range(self.max_x):
+                cell = self.cells[y, x]
+                if isinstance(cell, Cell):
+                    alive_neighbors = self.count(x, y, Cell.ALIVE)
+                    if cell.state == Cell.ALIVE:
+                        if alive_neighbors < 2 or alive_neighbors > 3:
+                            new_cells[y, x] = Cell(x, y, Cell.DEAD)
+                        else:
+                            new_cells[y, x] = Cell(x, y, Cell.ALIVE)
+                    elif cell.state == Cell.DEAD:
+                        if alive_neighbors == 3:
+                            new_cells[y, x] = Cell(x, y, Cell.ALIVE)
+                        else:
+                            new_cells[y, x] = Cell(x, y, Cell.DEAD)
+                else:
+                    new_cells[y, x] = None
+        self.cells = new_cells
+        
+    def fill(self, state: int = Cell.DEAD):
+        """
+        Заполняет сетку клетками заданного состояния
+        """
+        for y in range(self.max_y):
+            for x in range(self.max_x):
+                cell = Cell(x, y, state)
+                self.cells[y, x] = cell
+
     def clear(self):
         """
         Очищает сетку, удаляя все живие и мёртвые клетки
