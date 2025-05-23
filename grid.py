@@ -1,6 +1,7 @@
 import numpy as np
 from typing import List, Tuple, Union
 from cell import Cell
+from scipy.ndimage import convolve
 
 class Grid():
     """
@@ -9,6 +10,12 @@ class Grid():
     # Константы для максимальных размеров сетки
     MAX_X = 256
     MAX_Y = 256
+    
+    KERNEL = np.array([
+    [1, 1, 1],
+    [1, 0, 1],
+    [1, 1, 1]
+    ], dtype=int)
 
     def __init__(self, width: int = MAX_X, height: int = MAX_Y):
         Grid.MAX_X = width
@@ -64,15 +71,20 @@ class Grid():
         return f"Grid({self.max_x=}, {self.max_y=}, {alive_count=}, {dead_count=})"
 
     def grid2d(self):
-        """
-        Возвращает двумерный массив состояний клеток
-        """
-        return np.array([[cell.state if cell else 0 for cell in row] for row in self.cells])
+        if hasattr(self, '_grid2d_cache') and self._grid2d_cache is not None:
+            return self._grid2d_cache
+        arr = np.array([[cell.state if cell else 0 for cell in row] for row in self.cells])
+        self._grid2d_cache = arr
+        return arr
+
+    def _invalidate_cache(self):
+        self._grid2d_cache = None
     
     def populate_random(self, n: int, state: int = Cell.ALIVE):
         """
         Заполняет сетку случайными клетками, по умолчанию все живые (ALIVE)
         """
+        self._invalidate_cache()
         _state = state
         if state not in [Cell.ALIVE, Cell.DEAD]:
             raise ValueError("State must be either Cell.ALIVE or Cell.DEAD")
@@ -86,6 +98,7 @@ class Grid():
         """
         Заполняет сетку клетками по заданным координатам
         """
+        self._invalidate_cache()
         _state = state
         # FIXME Поправить чтобы можно было передавать состояние NONE
         if state not in [Cell.ALIVE, Cell.DEAD, Cell.NONE]:
@@ -123,39 +136,79 @@ class Grid():
                     count += 1
         return count
     
+    # def step(self):
+    #     self._invalidate_cache()
+    #     new_cells = np.empty_like(self.cells)
+    #     arr = self.grid2d()
+    #     for y in range(self.max_y):
+    #         for x in range(self.max_x):
+    #             cell = self.cells[y, x]
+    #             state = cell.state if cell else Cell.NONE
+    #             alive_neighbors = self.count(x, y, Cell.ALIVE)
+    #             # Пример для "Жизни"
+    #             if state == Cell.ALIVE:
+    #                 if alive_neighbors < 2 or alive_neighbors > 3:
+    #                     new_state = Cell.DEAD
+    #                 else:
+    #                     new_state = Cell.ALIVE
+    #             else:
+    #                 if alive_neighbors == 3:
+    #                     new_state = Cell.ALIVE
+    #                 else:
+    #                     new_state = Cell.DEAD
+    #             # Только если состояние изменилось — создаём новый объект
+    #             if state != new_state:
+    #                 new_cells[y, x] = Cell(x, y, new_state)
+    #             else:
+    #                 new_cells[y, x] = cell
+    #     self.cells = new_cells
+    
+    # def step(self):
+    #     self._invalidate_cache()
+    #     arr = self.grid2d()
+    #     alive_mask = (arr == Cell.ALIVE).astype(int)
+    #     neighbors = convolve(alive_mask, self.KERNEL, mode='constant', cval=0)
+    #     new_cells = np.empty_like(self.cells)
+    #     for y in range(self.max_y):
+    #         for x in range(self.max_x):
+    #             state = arr[y, x]
+    #             n = neighbors[y, x]
+    #             if state == Cell.ALIVE:
+    #                 new_state = Cell.ALIVE if 2 <= n <= 3 else Cell.DEAD
+    #             else:
+    #                 new_state = Cell.ALIVE if n == 3 else Cell.DEAD
+    #             if state != new_state:
+    #                 new_cells[y, x] = Cell(x, y, new_state)
+    #             else:
+    #                 new_cells[y, x] = self.cells[y, x]
+    #     self.cells = new_cells
+    
     def step(self):
-        """
-        Выполняет один шаг симуляции, обновляя состояние клеток по следующим правилам:
-        1. Если клетка живая (ALIVE) и у неё меньше 2-х или больше 3-х живых соседей, она умирает (DEAD).
-        2. Если клетка живая (ALIVE) и у неё 2 или 3 живых соседа, она остаётся живой (ALIVE).
-        3. Если клетка мёртвая (DEAD) и у неё ровно 3 живых соседа, она становится живой (ALIVE).
-        4. В противном случае клетка остаётся мёртвой (DEAD).
-        
-        """
-        new_cells = np.empty((self.max_y, self.max_x), dtype=object)
+        self._invalidate_cache()
+        arr = self.grid2d()
+        alive_mask = (arr == Cell.ALIVE).astype(int)
+        # Меняем mode='constant' на mode='wrap'
+        neighbors = convolve(alive_mask, self.KERNEL, mode='wrap')
+        new_cells = np.empty_like(self.cells)
         for y in range(self.max_y):
             for x in range(self.max_x):
-                cell = self.cells[y, x]
-                if isinstance(cell, Cell):
-                    alive_neighbors = self.count(x, y, Cell.ALIVE)
-                    if cell.state == Cell.ALIVE:
-                        if alive_neighbors < 2 or alive_neighbors > 3:
-                            new_cells[y, x] = Cell(x, y, Cell.DEAD)
-                        else:
-                            new_cells[y, x] = Cell(x, y, Cell.ALIVE)
-                    elif cell.state == Cell.DEAD:
-                        if alive_neighbors == 3:
-                            new_cells[y, x] = Cell(x, y, Cell.ALIVE)
-                        else:
-                            new_cells[y, x] = Cell(x, y, Cell.DEAD)
+                state = arr[y, x]
+                n = neighbors[y, x]
+                if state == Cell.ALIVE:
+                    new_state = Cell.ALIVE if 2 <= n <= 3 else Cell.DEAD
                 else:
-                    new_cells[y, x] = None
+                    new_state = Cell.ALIVE if n == 3 else Cell.DEAD
+                if state != new_state:
+                    new_cells[y, x] = Cell(x, y, new_state)
+                else:
+                    new_cells[y, x] = self.cells[y, x]
         self.cells = new_cells
-        
+
     def fill(self, state: int = Cell.DEAD):
         """
         Заполняет сетку клетками заданного состояния
         """
+        self._invalidate_cache()
         for y in range(self.max_y):
             for x in range(self.max_x):
                 cell = Cell(x, y, state)
@@ -165,4 +218,5 @@ class Grid():
         """
         Очищает сетку, удаляя все живие и мёртвые клетки
         """
+        self._invalidate_cache()
         self.cells.fill(None)
