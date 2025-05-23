@@ -78,7 +78,7 @@ class Patterns:
         "loafer": LOAFER,
         "pulsar": PULSAR,
         "lwss": LWSS,
-        "gosper_glider_gun": GOSPER_GLIDER_GUN,
+        "gosper_glider_gun": GOSPER_GLIDER_GUN, # FIXME
         "rpentomino": RPENTOMINO
     }
     

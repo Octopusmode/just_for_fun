@@ -26,11 +26,9 @@ PATTERN_KEYS = [
 ]
 PATTERN_NAMES = list(Patterns.PATTERNS.keys())
 
-
-
 SCALE = 8
-SIZE_X = 100
-SIZE_Y = 100
+SIZE_X = 250
+SIZE_Y = 140
 ALIVE_START = (SIZE_X*SIZE_Y - random.randint(0, SIZE_X//10))
 # DEAD_START = (SIZE_X*SIZE_Y - random.randint(0, SIZE_X//10))
 
@@ -107,6 +105,12 @@ if __name__ == "__main__":
         img[img == 2] = 255
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
         img = cv2.resize(img, (img.shape[1] * SCALE, img.shape[0] * SCALE), interpolation=cv2.INTER_NEAREST)
+        if SCALE > 3:
+            for y in range(0, img.shape[0], SCALE):
+                img[y:y+1, :] = 0
+            for x in range(0, img.shape[1], SCALE):
+                img[:, x:x+1] = 0
+        
         cv2.imshow("Grid", img)
         
         key = cv2.waitKey(delay=delay) & 0xFF
